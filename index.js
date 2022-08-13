@@ -17,7 +17,7 @@ app.use(express.json())
 const port=process.env.PORT || 5000;
 
 
-const uri = "mongodb+srv://admin:cWNclgd0ns7WHOQM@cluster0.xrvxz.mongodb.net/?retryWrites=true&w=majority";
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.0tytznn.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
 // app.get('/', async(req, res)=>{
@@ -27,10 +27,10 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 async function run() {
     try {
       await client.connect();
-      const servicesCollection = client.db("servectg").collection("services");
+      const packageCollection = client.db("beriye").collection("package");
   
       app.get("/service", async (req, res) => {
-        const services = await servicesCollection.find({}).toArray();
+        const services = await packageCollection .find({}).toArray();
         console.log(services);
         res.send(services);
 
