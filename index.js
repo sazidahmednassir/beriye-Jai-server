@@ -29,7 +29,7 @@ async function run() {
       await client.connect();
       const packageCollection = client.db("beriye").collection("package");
   
-      app.get("/service", async (req, res) => {
+      app.get("/package", async (req, res) => {
         const services = await packageCollection .find({}).toArray();
         console.log(services);
         res.send(services);
