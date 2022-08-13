@@ -1,5 +1,6 @@
 const express=require('express');
 const cors= require('cors')
+const jwt = require("jsonwebtoken");
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
@@ -24,59 +25,75 @@ const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology:
 //     res.sendFile("F:/hero/servectg-server/index.html")
 // })
 
+function verifyJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "UnAuthorized access" });
+  }
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
+    req.decoded = decoded;
+    next();
+  });
+}
+
+
 async function run() {
     try {
       await client.connect();
       const packageCollection = client.db("beriye").collection("package");
+      const usersCollection = client.db("beriye").collection("users");
   
+      //fetch all the package
       app.get("/package", async (req, res) => {
-        const services = await packageCollection .find({}).toArray();
-        console.log(services);
-        res.send(services);
-
-         //* With try catch block
-
-    // app.post("/add-service", async (req, res) => {
-    //   try {
-    //     const data = req.body;
-    //     const result = await servicesCollection.insertOne(data);
-    //     res.send({ status: true, result: result });
-    //   } catch (error) {
-    //     res.send({ status: false, error });
-    //   }
-    // });
-
-        app.post("/add-service", async (req, res) => {
-          const data = req.body;
-          const result = await servicesCollection.insertOne(data);
-          res.send(result);
+        const packages = await packageCollection .find({}).toArray();
+        
+        res.send(packages);
+       
         });
 
-        app.put("/update-service/:id", async (req, res) => {
-          const { id } = req.params;
-          const data = req.body;
-    
-          const filter = { _id: ObjectId(id) };
-          const updateDoc = { $set: data };
-          const option = { upsert: true };
-    
-          const result = await servicesCollection.updateOne(
-            filter,
-            updateDoc,
-            option
+        app.get("/package/:id", async(req, res)=>{
+          const id = req.params.id;
+          console.log(id)
+          const query = { _id: ObjectId(id) };
+          const spack = await packageCollection.findOne(query);
+          res.send(spack);
+        })
+            
+        app.put("/users/:email",  async (req, res) => {
+          const email = req.params.email;
+          const user = req.body;
+          console.log(user)
+          const filter = { email: email };
+          const options = { upsert: true };
+          const updateDoc = {
+            $set: user,
+          };
+          const result = await usersCollection.updateOne(filter, updateDoc, options);
+          const token = jwt.sign(
+            { email: email },
+            process.env.ACCESS_TOKEN_SECRET
+            
           );
-    
-          res.send(result);
+          console.log(result, token)
+     
+          res.send({ result, token });
         });
-      });
-
-      app.delete("/delete-service/:id", async (req, res) => {
-        const { id } = req.params;
-        const query = { _id: ObjectId(id) };
-        const result = await servicesCollection.deleteOne(query);
   
-        res.send(result);
-      });
+
+    app.get("/allusers", async(req, res)=>{
+
+      const users= await usersCollection.find().toArray();
+      res.send(users)
+
+    })
+
+      
+
+     
 
     } finally {
     }
@@ -95,19 +112,10 @@ async function run() {
   });
 
 
-  app.get("/dummy-route/user", async (req, res) => {
-    const { name, age } = req.query;
-    console.log(name);
-    console.log(age);
-    res.json(name);
-  });
+ 
 
 
-  app.get("/user/:id", async (req, res) => {
-    const { id } = req.params;
   
-    res.json(id);
-  });
   
  
 
