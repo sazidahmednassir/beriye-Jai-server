@@ -54,7 +54,7 @@ async function run() {
         res.send(packages);
        
         });
-
+          //FETCH SINGLE PACKAGE
         app.get("/package/:id", async(req, res)=>{
           const id = req.params.id;
           console.log(id)
@@ -62,7 +62,8 @@ async function run() {
           const spack = await packageCollection.findOne(query);
           res.send(spack);
         })
-            
+          
+        //UPDATE USERS
         app.put("/users/:email",  async (req, res) => {
           const email = req.params.email;
           const user = req.body;
@@ -83,15 +84,44 @@ async function run() {
           res.send({ result, token });
         });
   
-
-    app.get("/allusers", async(req, res)=>{
+    //FETCH ALL USERS
+    app.get("/allusers", verifyJWT, async(req, res)=>{
 
       const users= await usersCollection.find().toArray();
       res.send(users)
 
     })
-
       
+    //MAKE ADMIN USERS
+    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
+      const email = req.params.email;
+      const requester = req.decoded.email;
+      const requesterAccount = await userCollection.findOne({
+        email: requester,
+      });
+      if (requesterAccount.role === "admin") {
+        const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc);
+      console.log(result)
+      res.send(result);
+      
+      } else {
+        res.status(403).send({ message: "forbidden" });
+      }
+      
+    });
+      
+     //GET ADMIN USERS fetch
+     app.get("/admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email: email });
+      const isAdmin = user.role === "admin";
+      console.log(isAdmin)
+      res.send({ admin: isAdmin });
+    });
 
      
 
