@@ -46,6 +46,8 @@ async function run() {
       await client.connect();
       const packageCollection = client.db("beriye").collection("package");
       const usersCollection = client.db("beriye").collection("users");
+    const ordersCollection = client.db("beriye").collection("orders");
+
   
       //fetch all the package
       app.get("/package", async (req, res) => {
@@ -121,6 +123,17 @@ async function run() {
       const isAdmin = user.role === "admin";
       console.log(isAdmin)
       res.send({ admin: isAdmin });
+    });
+
+    //TAKE ORDERS 
+    app.post("/order", verifyJWT,  async (req, res) => {
+      
+      const order = req.body;
+      console.log(order);
+      const result = await ordersCollection.insertOne(order);
+      res.send(result);
+      
+      
     });
 
      
