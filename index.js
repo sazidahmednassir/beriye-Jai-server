@@ -136,6 +136,22 @@ async function run() {
       
     });
 
+    //GET ORDERS
+    app.get("/orders", verifyJWT, async (req, res) => {
+      const user = req.query.user;
+      console.log(user)
+      const decodedEmail = req.decoded.email;
+      console.log(user)
+      if (user === decodedEmail) {
+        const query = { user: user };
+        const orders = await ordersCollection.find(query).toArray();
+        console.log(orders)
+        return res.send(orders);
+      } else {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+    });
+
      
 
     } finally {
