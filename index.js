@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+var nodemailer = require('nodemailer');
+var sgTransport = require('nodemailer-sendgrid-transport');
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -44,6 +46,41 @@ function verifyJWT(req, res, next) {
   });
 }
 
+var emailSenderOptions = {
+  auth: {
+    api_key: process.env.EMAIL_SENDER_KEY
+  }
+}
+
+const  emailClient = nodemailer.createTransport(sgTransport(emailSenderOptions));
+
+function sendCustomPackageConfirmationEmail(cus){
+
+  const {name, useremail, places, pnumber}=cus;
+
+  var email = {
+    from: process.env.EMAIL_SENDER,
+    to: useremail,
+    subject: `Your Book for ${places} is  taken`,
+    text: `Your Order for ${places} is  taken`,
+    html: `
+    <div>
+      <p> Hello ${name}, </p>
+      <h3>We contact you through your number  ${pnumber} </h3>
+     </div>
+  `
+  };
+
+  emailClient.sendMail(email, function(err, info){
+    if (err ){
+      console.log(err);
+    }
+    else {
+      console.log('Message sent: ' ,  info);
+    }
+});
+}
+
 async function run() {
   try {
     await client.connect();
@@ -51,6 +88,20 @@ async function run() {
     const usersCollection = client.db("beriye").collection("users");
     const ordersCollection = client.db("beriye").collection("orders");
     const paymentCollection = client.db("beriye").collection("payments");
+    const customCollection = client.db("beriye").collection("custom");
+
+     // verify ADMIN FUNCTION
+    const verifyAdmin = async (req, res, next) => {
+      const requester = req.decoded.email;
+      const requesterAccount = await userCollection.findOne({
+        email: requester,
+      });
+      if (requesterAccount.role === "admin") {
+        next();
+      } else {
+        res.status(403).send({ message: "forbidden" });
+      }
+    };
 
     //fetch all the package
     app.get("/package", async (req, res) => {
@@ -91,17 +142,13 @@ async function run() {
     //FETCH ALL USERS
     app.get("/allusers", verifyJWT, async (req, res) => {
       const users = await usersCollection.find().toArray();
+      
       res.send(users);
     });
 
     //MAKE ADMIN USERS
-    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
+    app.put("/user/admin/:email", verifyJWT, verifyAdmin, async (req, res) => {
       const email = req.params.email;
-      const requester = req.decoded.email;
-      const requesterAccount = await userCollection.findOne({
-        email: requester,
-      });
-      if (requesterAccount.role === "admin") {
         const filter = { email: email };
         const updateDoc = {
           $set: { role: "admin" },
@@ -109,13 +156,11 @@ async function run() {
         const result = await usersCollection.updateOne(filter, updateDoc);
         console.log(result);
         res.send(result);
-      } else {
-        res.status(403).send({ message: "forbidden" });
-      }
+      
     });
 
     //GET ADMIN USERS fetch
-    app.get("/admin/:email", async (req, res) => {
+    app.get("/admin/:email",  async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email: email });
       const isAdmin = user.role === "admin";
@@ -157,6 +202,40 @@ async function run() {
       res.send(booking);
     });
 
+    //add package
+    app.post("/add-package", verifyJWT, async (req, res) => {
+      const package = req.body;
+      console.log(package);
+      const result = await packageCollection.insertOne(package);
+      res.send(result);
+    });
+
+    //custom package route
+    app.post("/cus", verifyJWT, async (req, res) => {
+      const cuspackage = req.body;
+      console.log(cuspackage);
+      const result = await customCollection.insertOne(cuspackage);
+      console.log(result)
+      sendCustomPackageConfirmationEmail(cuspackage)
+      res.send(result);
+    });
+
+    //update user 
+    app.put("/update-user", verifyJWT, async(req, res)=>{
+    const email = req.decoded.email;
+    const filter = { email: email };
+    const data = req.body
+    const updateDoc = {
+      $set: { 
+        name: req.body.name,
+        img: req.body.img
+       },
+    }
+    const result = await usersCollection.updateOne(filter, updateDoc);
+    console.log(result)
+    res.send(result)
+    })
+
     //PAYMENT TO STRIPE
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const service = req.body;
@@ -188,7 +267,11 @@ async function run() {
       // sendPaymentConfirmationEmail(payment.payment)
       res.send(updatedOrder);
 
+
+     
     })
+
+  
   } finally {
   }
 }
