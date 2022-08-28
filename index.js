@@ -89,6 +89,8 @@ async function run() {
     const ordersCollection = client.db("beriye").collection("orders");
     const paymentCollection = client.db("beriye").collection("payments");
     const customCollection = client.db("beriye").collection("custom");
+    const visitCollection = client.db("beriye").collection("visit");
+    const reviewCollection = client.db("beriye").collection('reviews');
 
      // verify ADMIN FUNCTION
     const verifyAdmin = async (req, res, next) => {
@@ -202,6 +204,24 @@ async function run() {
       res.send(booking);
     });
 
+    //get vistable place
+    app.get("/visit", async(req, res)=>{
+      const visit = await visitCollection.find().toArray();
+      
+      res.send(visit);
+
+    })
+    //get vistable place by id
+    app.get("/visit/:id", async(req, res)=>{
+      const id = req.params.id;
+      // console.log(id);
+      const query = { _id: ObjectId(id) };
+      const visit = await visitCollection.findOne(query);
+      console.log(visit);
+      res.send(visit);
+
+    })
+
     //add package
     app.post("/add-package", verifyJWT, async (req, res) => {
       const package = req.body;
@@ -247,6 +267,25 @@ async function run() {
         payment_method_types: ["card"],
       });
       res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+    //add review
+    app.post("/review", verifyJWT, async (req, res) => {
+      const review = req.body;
+      console.log(review);
+      const result = await reviewCollection.insertOne(review);
+      res.send(result);
+    })
+
+    //get reviews
+    
+    app.get("/reviews", async (req, res) => {
+      const limit = Number(req.query.limit);
+      const cursor = reviewCollection .find();
+
+      const result = await cursor.limit(limit).toArray();
+
+      res.send(result);
     });
 
     //update payments
