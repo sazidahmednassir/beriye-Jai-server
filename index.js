@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-var nodemailer = require('nodemailer');
-var sgTransport = require('nodemailer-sendgrid-transport');
+var nodemailer = require("nodemailer");
+var sgTransport = require("nodemailer-sendgrid-transport");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -48,15 +48,14 @@ function verifyJWT(req, res, next) {
 
 var emailSenderOptions = {
   auth: {
-    api_key: process.env.EMAIL_SENDER_KEY
-  }
-}
+    api_key: process.env.EMAIL_SENDER_KEY,
+  },
+};
 
-const  emailClient = nodemailer.createTransport(sgTransport(emailSenderOptions));
+const emailClient = nodemailer.createTransport(sgTransport(emailSenderOptions));
 
-function sendCustomPackageConfirmationEmail(cus){
-
-  const {name, useremail, places, pnumber}=cus;
+function sendCustomPackageConfirmationEmail(cus) {
+  const { name, useremail, places, pnumber } = cus;
 
   var email = {
     from: process.env.EMAIL_SENDER,
@@ -68,17 +67,47 @@ function sendCustomPackageConfirmationEmail(cus){
       <p> Hello ${name}, </p>
       <h3>We contact you through your number  ${pnumber} </h3>
      </div>
-  `
+  `,
   };
 
-  emailClient.sendMail(email, function(err, info){
-    if (err ){
+  emailClient.sendMail(email, function (err, info) {
+    if (err) {
       console.log(err);
+    } else {
+      console.log("Message sent: ", info);
     }
-    else {
-      console.log('Message sent: ' ,  info);
+  });
+}
+
+function sendPaymentConfirmationEmail(payment) {
+  const { packageName, user, order, transactionId } = payment;
+
+  var email = {
+    from: process.env.EMAIL_SENDER,
+    to: user,
+    subject: `Your Payment for ${order} is  taken`,
+    text: `Your Payment for ${order} is  taken`,
+    html: `
+    <div>
+      <p> Hello , </p>
+      <h3>Thank you for your Order . Your Package Name : ${packageName} is Paid </h3>
+      <h3>Your Transaction id ${transactionId} & your Order id ${order}</h3>
+      
+      
+      <p>we will contact through your email</p>
+      
+      
+    </div>
+  `,
+  };
+
+  emailClient.sendMail(email, function (err, info) {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log("Message sent: ", info);
     }
-});
+  });
 }
 
 async function run() {
@@ -90,9 +119,12 @@ async function run() {
     const paymentCollection = client.db("beriye").collection("payments");
     const customCollection = client.db("beriye").collection("custom");
     const visitCollection = client.db("beriye").collection("visit");
-    const reviewCollection = client.db("beriye").collection('reviews');
+    const reviewCollection = client.db("beriye").collection("reviews");
+    const studyCollection = client.db("beriye").collection("study");
+    const corporateCollection = client.db("beriye").collection("corporate");
+    const placeCollection = client.db("beriye").collection("places");
 
-     // verify ADMIN FUNCTION
+    // verify ADMIN FUNCTION
     const verifyAdmin = async (req, res, next) => {
       const requester = req.decoded.email;
       const requesterAccount = await userCollection.findOne({
@@ -104,6 +136,13 @@ async function run() {
         res.status(403).send({ message: "forbidden" });
       }
     };
+
+    //fetch all places
+    app.get("/place", async (req, res) => {
+      const place = await placeCollection.find({}).toArray();
+
+      res.send(place);
+    });
 
     //fetch all the package
     app.get("/package", async (req, res) => {
@@ -144,25 +183,24 @@ async function run() {
     //FETCH ALL USERS
     app.get("/allusers", verifyJWT, async (req, res) => {
       const users = await usersCollection.find().toArray();
-      
+
       res.send(users);
     });
 
     //MAKE ADMIN USERS
     app.put("/user/admin/:email", verifyJWT, verifyAdmin, async (req, res) => {
       const email = req.params.email;
-        const filter = { email: email };
-        const updateDoc = {
-          $set: { role: "admin" },
-        };
-        const result = await usersCollection.updateOne(filter, updateDoc);
-        console.log(result);
-        res.send(result);
-      
+      const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc);
+      console.log(result);
+      res.send(result);
     });
 
     //GET ADMIN USERS fetch
-    app.get("/admin/:email",  async (req, res) => {
+    app.get("/admin/:email", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email: email });
       const isAdmin = user.role === "admin";
@@ -205,22 +243,20 @@ async function run() {
     });
 
     //get vistable place
-    app.get("/visit", async(req, res)=>{
+    app.get("/visit", async (req, res) => {
       const visit = await visitCollection.find().toArray();
-      
-      res.send(visit);
 
-    })
+      res.send(visit);
+    });
     //get vistable place by id
-    app.get("/visit/:id", async(req, res)=>{
+    app.get("/visit/:id", async (req, res) => {
       const id = req.params.id;
       // console.log(id);
       const query = { _id: ObjectId(id) };
       const visit = await visitCollection.findOne(query);
       console.log(visit);
       res.send(visit);
-
-    })
+    });
 
     //add package
     app.post("/add-package", verifyJWT, async (req, res) => {
@@ -235,26 +271,26 @@ async function run() {
       const cuspackage = req.body;
       console.log(cuspackage);
       const result = await customCollection.insertOne(cuspackage);
-      console.log(result)
-      sendCustomPackageConfirmationEmail(cuspackage)
+      console.log(result);
+      sendCustomPackageConfirmationEmail(cuspackage);
       res.send(result);
     });
 
-    //update user 
-    app.put("/update-user", verifyJWT, async(req, res)=>{
-    const email = req.decoded.email;
-    const filter = { email: email };
-    const data = req.body
-    const updateDoc = {
-      $set: { 
-        name: req.body.name,
-        img: req.body.img
-       },
-    }
-    const result = await usersCollection.updateOne(filter, updateDoc);
-    console.log(result)
-    res.send(result)
-    })
+    //update user
+    app.put("/update-user", verifyJWT, async (req, res) => {
+      const email = req.decoded.email;
+      const filter = { email: email };
+      const data = req.body;
+      const updateDoc = {
+        $set: {
+          name: req.body.name,
+          img: req.body.img,
+        },
+      };
+      const result = await usersCollection.updateOne(filter, updateDoc);
+      console.log(result);
+      res.send(result);
+    });
 
     //PAYMENT TO STRIPE
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
@@ -275,42 +311,51 @@ async function run() {
       console.log(review);
       const result = await reviewCollection.insertOne(review);
       res.send(result);
-    })
+    });
 
     //get reviews
-    
+
     app.get("/reviews", async (req, res) => {
       const limit = Number(req.query.limit);
-      const cursor = reviewCollection .find();
+      const cursor = reviewCollection.find();
 
       const result = await cursor.limit(limit).toArray();
 
       res.send(result);
     });
 
+    //get study api
+    app.get("/study", async (req, res) => {
+      const study = await studyCollection.find().toArray();
+
+      res.send(study);
+    });
+
+    //get corporate api
+    app.get("/corpor", async (req, res) => {
+      const result = await corporateCollection.find().toArray();
+
+      res.send(result);
+    });
+
     //update payments
-    app.patch('/payment/:id', verifyJWT,  async(req, res)=>{
-      const id  = req.params.id;
+    app.patch("/payment/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
       const payment = req.body;
-      console.log(payment)
-      const filter = {_id: ObjectId(id)};
+      console.log(payment);
+      const filter = { _id: ObjectId(id) };
       const updatedDoc = {
         $set: {
           paid: true,
           transactionId: payment.payment.transactionId,
-          status:payment.status
-        }
-      }
+          status: payment.status,
+        },
+      };
       const result = await paymentCollection.insertOne(payment.payment);
       const updatedOrder = await ordersCollection.updateOne(filter, updatedDoc);
-      // sendPaymentConfirmationEmail(payment.payment)
+      sendPaymentConfirmationEmail(payment.payment);
       res.send(updatedOrder);
-
-
-     
-    })
-
-  
+    });
   } finally {
   }
 }
